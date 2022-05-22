@@ -10,6 +10,7 @@ import io.netty.handler.logging.LoggingHandler;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
+import java.util.Scanner;
 
 /**
  * @author chengyuankuo
@@ -19,7 +20,8 @@ import java.net.InetSocketAddress;
 public class NettyClient {
 
     public static void main(String[] args) throws InterruptedException {
-        ChannelFuture channelFuture = new Bootstrap().group(new NioEventLoopGroup())
+        NioEventLoopGroup group = new NioEventLoopGroup();
+        ChannelFuture channelFuture = new Bootstrap().group(group)
                 .channel(NioSocketChannel.class)
                 .handler(new ChannelInitializer<NioSocketChannel>() {
                     @Override
@@ -34,7 +36,24 @@ public class NettyClient {
             @Override
             public void operationComplete(ChannelFuture channelFuture) throws Exception {
                 Channel channel = channelFuture.channel();
-                channel.writeAndFlush("hello");
+                ChannelFuture closeFuture = channel.closeFuture();
+                closeFuture.addListener(new ChannelFutureListener() {
+                    @Override
+                    public void operationComplete(ChannelFuture channelFuture) throws Exception {
+                        log.debug("channel close done");
+                        group.shutdownGracefully();
+                    }
+                });
+                Scanner scanner = new Scanner(System.in);
+                while (true){
+                    String line = scanner.nextLine();
+                    if ("q".equals(line)){
+                        channel.close();
+                        break;
+                    }
+                    log.debug("send {}",line);
+                    channel.writeAndFlush(line);
+                }
             }
         });
     }
