@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Random;
 import java.util.Scanner;
 
 /**
@@ -32,19 +33,21 @@ public class NettyClient {
                 .handler(new ChannelInitializer<NioSocketChannel>() {
                     @Override
                     protected void initChannel(NioSocketChannel ch) throws Exception {
+                        ch.pipeline().addLast(new LoggingHandler(LogLevel.DEBUG));
                         ch.pipeline().addLast(new ChannelInboundHandlerAdapter() {
                             @Override
-                            public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-                                if(msg instanceof ByteBuf buf){
-                                    String str = buf.toString(Charset.defaultCharset());
-                                    System.out.println("recv echo");
-                                    log.debug("recv echo msg---{}",str);
+                            public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                                ByteBuf buf = ctx.alloc().buffer();
+                                Random random = new Random();
+                                char c = '0';
+                                for (int i = 0; i < 10; i++) {
+                                    int randomInt = random.nextInt(10) + 1;
+                                    byte[] bytes = getByte(c, randomInt, 10);
+                                    buf.writeBytes(bytes);
+                                    c++;
                                 }
-                            }
-
-                            @Override
-                            public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
-                                ctx.flush();
+                                ctx.channel().writeAndFlush(buf);
+                                log.debug("channelActive");
                             }
                         });
 
@@ -64,17 +67,19 @@ public class NettyClient {
                         group.shutdownGracefully();
                     }
                 });
-
-                //TODO: 2022/5/23 12:55 AM 程远阔： 这里为什么死循环就无法打印日志了
-                Scanner scanner = new Scanner(System.in);
-                String line = scanner.nextLine();
-                if ("q".equals(line)) {
-                    channel.close();
-                }
-                log.debug("send {}", line);
-                ByteBuf byteBuf = Unpooled.copiedBuffer(line.getBytes(Charset.defaultCharset()));
-                channel.writeAndFlush(byteBuf);
             }
         });
+    }
+
+    private static byte[] getByte(char c,int clen,int totalLen){
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < totalLen; i++) {
+            if(i < clen){
+                sb.append(c);
+            }else {
+                sb.append("_");
+            }
+        }
+        return sb.toString().getBytes(Charset.defaultCharset());
     }
 }
